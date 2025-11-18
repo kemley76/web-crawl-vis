@@ -5,12 +5,12 @@ import {
   applyEdgeChanges,
   type Node,
   type Edge,
-  type FitViewOptions,
+  // type FitViewOptions,
   type OnConnect,
   type OnNodesChange,
   type OnEdgesChange,
-  type OnNodeDrag,
-  type DefaultEdgeOptions,
+  // type OnNodeDrag,
+  // type DefaultEdgeOptions,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
