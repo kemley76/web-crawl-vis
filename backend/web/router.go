@@ -32,9 +32,10 @@ func crawl(rw http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(rw, "Error parsing request: %v", err)
 	}
 	rw.Header().Set("Content-Type", "text/event-stream")
+	rw.Header().Set("Transfer-Encoding", "chunked")
 	rw.Header().Set("Cache-Control", "no-cache")
 	rw.Header().Set("Connection", "keep-alive")
 
 	crawler := crawler.NewCrawler(rw, crawlRequest.URLs)
-	crawler.Crawl(2, r.Context().Done())
+	crawler.Crawl(1, r.Context().Done())
 }
