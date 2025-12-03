@@ -8,6 +8,7 @@ import (
 	u "net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/kemley76/web-crawl-vis/v2/parser"
@@ -17,17 +18,24 @@ import (
 
 const MAX_CONCURRENT_REQS_PER_HOST = 5
 
+var client http.Client
+
+func init() {
+	client = http.Client{Timeout: time.Second * 3}
+}
+
 type crawler struct {
 	seedURLs        []string
 	rw              http.ResponseWriter // Used to send responses to the client
 	client          *http.Client        // Used to fetch data from the web pages its crawling
 	dataChannel     chan pageData       // Used to forward data from the async crawling functions to the client
 	visitedURLs     sync.Map
-	robotsData      map[string]*robotstxt.RobotsData
+	robotsData      sync.Map                // map[string]*robotstxt.RobotsData
 	queues          map[string][]queueEntry // maps domains to URLs
 	queueLock       sync.Mutex
 	connectionAlive bool
 	wg              sync.WaitGroup
+	id_counter      atomic.Uint64
 }
 
 type queueEntry struct {
@@ -42,7 +50,6 @@ func NewCrawler(rw http.ResponseWriter, seedURLs []string) *crawler {
 		rw:              rw,
 		client:          &http.Client{},
 		dataChannel:     make(chan pageData),
-		robotsData:      make(map[string]*robotstxt.RobotsData),
 		queues:          make(map[string][]queueEntry), // maps domains to URLs
 		connectionAlive: true,
 	}
@@ -68,7 +75,7 @@ func (c *crawler) Crawl(depth int, clientDone <-chan struct{}) {
 				fmt.Println("Connection closed")
 				return
 			case data := <-c.dataChannel:
-				fmt.Println("Crawled page:", data.Title)
+				fmt.Println("Crawled page:", data.Title, data.URL)
 				fmt.Fprint(c.rw, "data: ")
 				err := json.NewEncoder(c.rw).Encode(data)
 				if err != nil {
@@ -84,31 +91,26 @@ func (c *crawler) Crawl(depth int, clientDone <-chan struct{}) {
 	}()
 
 	c.wg.Wait()
+	c.visitedURLs.Range(func(key, value any) bool {
+		fmt.Println("Key", key, "value", value)
+		return true
+	})
 	fmt.Println("Done crawling!")
 }
 
-func (c *crawler) enqueuePage(rawURL string, depth int) {
-	url, err := u.Parse(rawURL)
+func (c *crawler) enqueuePage(rawURL string, depth int) (uint64, error) {
+	url, err := cleanURL(rawURL, "")
 	if err != nil {
-		panic("Invalid URL") // TODO: send error to user?
+		return 0, err
 	}
-	if url.Host == "" { // add on protocol in order to extract hostname
-		url, err = u.Parse("https://" + rawURL)
-		if err != nil {
-			return
-		}
-	} else if url.Scheme == "" {
-		url.Scheme = "https://"
-	}
-	url.Fragment = ""
-	url.RawQuery = ""
 
-	if _, ok := c.visitedURLs.Load(url.String()); ok {
-		return // we have already visited this page
+	if id, ok := c.getNodeID(url.String()); ok {
+		return id, nil
 	}
 
 	fmt.Printf("Queuing %s at depth %d\n", url.String(), depth)
-	c.visitedURLs.Store(url, true)
+	id := c.id_counter.Add(1)
+	c.visitedURLs.Store(url.String(), id)
 	c.wg.Add(1)
 
 	c.queueLock.Lock()
@@ -122,11 +124,15 @@ func (c *crawler) enqueuePage(rawURL string, depth int) {
 		// Maybe try to change this out so that CrawlHost function never finishes until its actually all done
 		go c.CrawlHost(url.Host, depth)
 	}
+	return id, nil
 }
 
 // CrawlHost will crawl all the pages in the queue of a particular host up to a given depth
 func (c *crawler) CrawlHost(hostname string, depth int) {
 	robotsData := c.getRobotsData(hostname)
+	if robotsData == nil {
+		robotsData = &robotstxt.RobotsData{}
+	}
 	waittime := robotsData.FindGroup("")
 	fmt.Println("Crawling host: ", hostname)
 
@@ -171,13 +177,14 @@ func (c *crawler) getNextURL(hostname string) (string, int) {
 	return qe.url, qe.depth
 }
 
-func (c *crawler) crawlPage(url, hostname string, depth int) {
-	fmt.Println("Crawling page:", url)
+func (c *crawler) crawlPage(rawURL, hostname string, depth int) {
 	pd := pageData{
-		URL: url,
+		URL: rawURL,
 	}
 
-	res, err := http.Get(url)
+	start := time.Now()
+	res, err := client.Get(rawURL)
+	pd.ResponseTime = int(time.Since(start).Milliseconds())
 
 	if err != nil {
 		pd.AddError("Error fetching page: " + err.Error())
@@ -190,15 +197,23 @@ func (c *crawler) crawlPage(url, hostname string, depth int) {
 		pd.AddError("Error fetching page: " + res.Status)
 	} else {
 		parseData := parser.ParseHTML(res.Body)
-		// only enqueue these links if the max depth has been reached...
-		if depth > 0 {
-			for _, link := range parseData.Links {
-				if strings.HasPrefix(link, "/") {
-					link = fmt.Sprintf("https://%s%s", hostname, link)
-				} else if !strings.HasPrefix(link, "http") {
-					continue
+		pd.Neighbors = make([]uint64, 0, len(parseData.Links))
+		for _, link := range parseData.Links {
+			url, err := cleanURL(link, hostname)
+			if err != nil {
+				continue
+			}
+			if depth > 0 {
+				// only enqueue these links if the max depth has not been reached
+				id, err := c.enqueuePage(url.String(), depth-1)
+				if err == nil {
+					pd.Neighbors = append(pd.Neighbors, id)
 				}
-				c.enqueuePage(link, depth-1)
+			} else {
+				id, ok := c.getNodeID(url.String())
+				if ok {
+					pd.Neighbors = append(pd.Neighbors, id)
+				}
 			}
 		}
 		pd.LinksFound = len(parseData.Links)
@@ -210,16 +225,52 @@ func (c *crawler) crawlPage(url, hostname string, depth int) {
 
 func (c *crawler) getRobotsData(hostname string) *robotstxt.RobotsData {
 	var data *robotstxt.RobotsData
-	data, ok := c.robotsData[hostname]
-	if !ok {
-		fmt.Println("fetching robots data for:", hostname)
-		res, err := http.Get(fmt.Sprintf("https://%s/robots.txt", hostname))
-		if err != nil {
-			panic("Error fetching robots.txt for " + hostname)
+	res, ok := c.robotsData.Load(hostname)
+	if ok {
+		return res.(*robotstxt.RobotsData)
+	} else {
+		fmt.Println("Fetching robots data for:", hostname)
+		res, err := client.Get(fmt.Sprintf("https://%s/robots.txt", hostname))
+		if err == nil {
+			data, err = robotstxt.FromResponse(res)
+			if err != nil {
+				fmt.Printf("Error parsing robots.txt for %s: %s\n", hostname, err.Error())
+			}
 		}
-
-		data, err = robotstxt.FromResponse(res)
-		c.robotsData[hostname] = data
+		c.robotsData.Store(hostname, data)
 	}
 	return data
+}
+
+func (c *crawler) getNodeID(url string) (uint64, bool) {
+	if id, ok := c.visitedURLs.Load(url); ok {
+		if id_int, ok := id.(uint64); ok {
+			return id_int, true
+		}
+		panic("get node id: cannot convert to uint64")
+	}
+	return 0, false
+}
+
+func cleanURL(rawURL string, hostname string) (*u.URL, error) {
+	if strings.HasPrefix(rawURL, "/") {
+		rawURL = fmt.Sprintf("https://%s%s", hostname, rawURL)
+	} else if !strings.HasPrefix(rawURL, "http") {
+		return nil, fmt.Errorf("Error cleaning URL: %s", rawURL)
+	}
+	url, err := u.Parse(rawURL)
+	if err != nil {
+		panic("Invalid URL" + rawURL)
+	}
+	if url.Host == "" { // add on protocol in order to extract hostname
+		url, err = u.Parse("https://" + rawURL)
+		if err != nil {
+			return nil, err
+		}
+	} else if url.Scheme == "" {
+		url.Scheme = "https://"
+	}
+	url.Fragment = ""
+	url.RawQuery = ""
+	return url, nil
 }

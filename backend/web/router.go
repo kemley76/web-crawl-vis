@@ -37,5 +37,5 @@ func crawl(rw http.ResponseWriter, r *http.Request) {
 	rw.Header().Set("Connection", "keep-alive")
 
 	crawler := crawler.NewCrawler(rw, crawlRequest.URLs)
-	crawler.Crawl(1, r.Context().Done())
+	crawler.Crawl(2, r.Context().Done())
 }

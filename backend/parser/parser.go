@@ -32,7 +32,9 @@ func traverse(n *html.Node, pd *ParseData) {
 				}
 			}
 		case "title":
-			pd.Title = n.FirstChild.Data
+			if n.FirstChild != nil {
+				pd.Title = n.FirstChild.Data
+			}
 		}
 	}
 
