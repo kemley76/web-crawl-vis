@@ -1,7 +1,7 @@
 package crawler
 
 type pageData struct {
-	ID           int      `json:"id"`
+	ID           uint64   `json:"id"`
 	URL          string   `json:"url"`
 	Title        string   `json:"title"`
 	LinksFound   int      `json:"linksFound"`

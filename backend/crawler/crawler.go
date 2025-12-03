@@ -178,8 +178,10 @@ func (c *crawler) getNextURL(hostname string) (string, int) {
 }
 
 func (c *crawler) crawlPage(rawURL, hostname string, depth int) {
+	id, _ := c.getNodeID(rawURL)
 	pd := pageData{
 		URL: rawURL,
+		ID:  id,
 	}
 
 	start := time.Now()
