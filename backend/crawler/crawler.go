@@ -76,7 +76,7 @@ func (c *crawler) Crawl(depth int, clientDone <-chan struct{}) {
 				return
 			case data := <-c.dataChannel:
 				fmt.Println("Crawled page:", data.Title, data.URL)
-				fmt.Fprint(c.rw, "data: ")
+				fmt.Fprint(c.rw, "event: data\ndata: ")
 				err := json.NewEncoder(c.rw).Encode(data)
 				if err != nil {
 					fmt.Println("Error encoding data", err)
@@ -95,6 +95,9 @@ func (c *crawler) Crawl(depth int, clientDone <-chan struct{}) {
 		fmt.Println("Key", key, "value", value)
 		return true
 	})
+
+	fmt.Fprint(c.rw, "event: close\ndata: \n\n")
+	flusher.Flush()
 	fmt.Println("Done crawling!")
 }
 
@@ -210,6 +213,8 @@ func (c *crawler) crawlPage(rawURL, hostname string, depth int) {
 				id, err := c.enqueuePage(url.String(), depth-1)
 				if err == nil {
 					pd.Neighbors = append(pd.Neighbors, id)
+				} else {
+					pd.Errors = append(pd.Errors, err.Error())
 				}
 			} else {
 				id, ok := c.getNodeID(url.String())
@@ -262,7 +267,7 @@ func cleanURL(rawURL string, hostname string) (*u.URL, error) {
 	}
 	url, err := u.Parse(rawURL)
 	if err != nil {
-		panic("Invalid URL" + rawURL)
+		return nil, err
 	}
 	if url.Host == "" { // add on protocol in order to extract hostname
 		url, err = u.Parse("https://" + rawURL)

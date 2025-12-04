@@ -1,9 +1,9 @@
 package web
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -21,21 +21,14 @@ func RunServer() {
 	http.ListenAndServe(":3000", r)
 }
 
-type CrawlRequest struct {
-	URLs []string `json:"urls"`
-}
-
 func crawl(rw http.ResponseWriter, r *http.Request) {
-	var crawlRequest CrawlRequest
-	err := json.NewDecoder(r.Body).Decode(&crawlRequest)
-	if err != nil {
-		fmt.Fprintf(rw, "Error parsing request: %v", err)
-	}
+	seeds := strings.Split(r.URL.Query().Get("seeds"), ",")
+	fmt.Println("SEEDS: ", seeds)
 	rw.Header().Set("Content-Type", "text/event-stream")
 	rw.Header().Set("Transfer-Encoding", "chunked")
 	rw.Header().Set("Cache-Control", "no-cache")
 	rw.Header().Set("Connection", "keep-alive")
 
-	crawler := crawler.NewCrawler(rw, crawlRequest.URLs)
-	crawler.Crawl(2, r.Context().Done())
+	crawler := crawler.NewCrawler(rw, seeds)
+	crawler.Crawl(1, r.Context().Done())
 }
