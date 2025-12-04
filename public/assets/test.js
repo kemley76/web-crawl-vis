@@ -27,6 +27,7 @@ function test() {
 		} else {
 			newElement.innerHTML = `<li>Error
 				<ul>
+					<li>ID: ${json.id}</li>
 					<li>URL: <a href=${json.url}>${json.url}</a></li>
 					<li>Errors: ${json.errors}</li>
 				<ul>

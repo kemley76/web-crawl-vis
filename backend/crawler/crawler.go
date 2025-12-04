@@ -147,7 +147,12 @@ func (c *crawler) CrawlHost(hostname string, depth int) {
 		}
 
 		if !robotsData.TestAgent(url, "Go-http-client/1.1") {
+			id, ok := c.getNodeID(url)
+			if !ok {
+				id = 0
+			}
 			c.dataChannel <- pageData{
+				ID:     id,
 				URL:    url,
 				Errors: []string{"Path blocked by robots.txt"},
 			}
@@ -223,7 +228,6 @@ func (c *crawler) crawlPage(rawURL, hostname string, depth int) {
 				}
 			}
 		}
-		pd.LinksFound = len(parseData.Links)
 		pd.Title = parseData.Title
 	}
 
