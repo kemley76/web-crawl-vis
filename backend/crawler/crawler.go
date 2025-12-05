@@ -16,7 +16,8 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-const MAX_CONCURRENT_REQS_PER_HOST = 5
+const MAX_CONCURRENT_REQS_PER_HOST = 10
+const ARTIFICIAL_DELAY = time.Millisecond * 250
 
 var client http.Client
 
@@ -163,7 +164,7 @@ func (c *crawler) CrawlHost(hostname string, depth int) {
 			defer sem.Release(1)
 			c.crawlPage(url, hostname, depth)
 		}()
-		time.Sleep(waittime.CrawlDelay)
+		time.Sleep(waittime.CrawlDelay + ARTIFICIAL_DELAY)
 	}
 }
 
