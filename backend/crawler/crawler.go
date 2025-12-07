@@ -28,7 +28,6 @@ func init() {
 type crawler struct {
 	seedURLs        []string
 	rw              http.ResponseWriter // Used to send responses to the client
-	client          *http.Client        // Used to fetch data from the web pages its crawling
 	dataChannel     chan pageData       // Used to forward data from the async crawling functions to the client
 	visitedURLs     sync.Map
 	robotsData      sync.Map                // map[string]*robotstxt.RobotsData
@@ -36,7 +35,7 @@ type crawler struct {
 	queueLock       sync.Mutex
 	connectionAlive bool
 	wg              sync.WaitGroup
-	id_counter      atomic.Uint64
+	id_counter      atomic.Uint64 // Used to create unique ids for each URL
 }
 
 type queueEntry struct {
@@ -49,7 +48,6 @@ func NewCrawler(rw http.ResponseWriter, seedURLs []string) *crawler {
 	return &crawler{
 		seedURLs:        seedURLs,
 		rw:              rw,
-		client:          &http.Client{},
 		dataChannel:     make(chan pageData),
 		queues:          make(map[string][]queueEntry), // maps domains to URLs
 		connectionAlive: true,
