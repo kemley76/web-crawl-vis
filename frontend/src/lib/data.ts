@@ -5,6 +5,8 @@ export interface Node extends d3.SimulationNodeDatum {
   group: string;
   title: string;
   url: string;
+  type: string;
+  radius: number;
 }
 
 export interface Link extends d3.SimulationLinkDatum<Node> {
