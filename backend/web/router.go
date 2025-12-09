@@ -24,11 +24,11 @@ func RunServer() {
 
 func crawl(rw http.ResponseWriter, r *http.Request) {
 	seeds := strings.Split(r.URL.Query().Get("seeds"), ",")
-	depth := strings.Split(r.URL.Query().Get("depth"), ",")
+	depth := r.URL.Query().Get("depth")
 	depthParsed := 1
 	if len(depth) > 0 {
 		var err error
-		depthParsed, err = strconv.Atoi(depth[0])
+		depthParsed, err = strconv.Atoi(depth)
 		if err != nil {
 			depthParsed = 1
 		}
