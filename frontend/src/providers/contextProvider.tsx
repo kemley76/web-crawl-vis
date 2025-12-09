@@ -1,15 +1,13 @@
 import useCache from "@/hooks/cache";
 import { type Data, type Link, type Node } from "@/lib/data";
-import { createContext, useContext, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 
 type ContextType = {
-  appState: "graph" | "home";
-  seed: string;
   colorList: [string, string][],
   loading: boolean;
   data: Data;
-  setAppState: Dispatch<SetStateAction<"graph" | "home">>,
-  setSeed: Dispatch<SetStateAction<string>>,
+  appState: { seed: string; depth: number, page: "home" | "graph" };
+  setAppState: (newSeed: string, newDepth: number, page: "home" | "graph") => void;
   getChildren: (nodeId: string) => Set<string> | undefined;
   getParent: (nodeId: string) => string | null;
 };
@@ -17,8 +15,7 @@ type ContextType = {
 const DEFAULT_COLOR = "#5c33ff"
 
 const defaultContext: ContextType = {
-  appState: "home",
-  seed: "https://go.dev/",
+  appState: { seed: "https://go.dev/", depth: 1, page: "home" },
   colorList: [],
   loading: false,
   data: {
@@ -26,7 +23,6 @@ const defaultContext: ContextType = {
     links: [],
   },
   setAppState: () => {},
-  setSeed: () => {},
   getChildren: () => undefined,
   getParent: () => null,
 };
@@ -51,14 +47,17 @@ export const ContextProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const [appState, setAppState] = useState<"graph" | "home">(defaultContext.appState);
-  const [seed, setSeed] = useState<string>(defaultContext.seed);
+  const [appState, _setAppState] = useState<{ seed: string; depth: number, page: "home" | "graph" }>(defaultContext.appState);
   const [data, setData] = useState<Data>(defaultContext.data);
   const [colorList, setColorList] = useState<[string, string][]>(defaultContext.colorList);
   const [loading, setLoading] = useState(defaultContext.loading);
   const nodesRef = useRef<Map<number, Node>>(new Map());
   const edgesRef = useRef<Map<string, Link>>(new Map());
   const adjList = useRef<Map<string, Set<string>>>(new Map());
+
+  const setAppState = (newSeed: string, newDepth: number, page: "home" | "graph") => {
+    _setAppState({ seed: newSeed, depth: newDepth, page });
+  };
 
   const getParent = (nodeId: string) => {
     const edge = data.links.find(
@@ -113,7 +112,7 @@ export const ContextProvider = ({
   const handleIncomingMessage = (message: SSEMessage) => {
     const { id, neighbors, errors, title, url } = message;
 
-    const root = seed === url;
+    const root = appState.seed === url;
 
     const replaceNode = nodesRef.current.has(id)
     const newNode: Node | undefined = {
@@ -187,6 +186,8 @@ export const ContextProvider = ({
   };
 
   useEffect(() => {
+    if (appState.page !== "graph") return;
+
     //@ts-ignore
     const isDev = process.env.NODE_ENV === "development";
 
@@ -215,7 +216,7 @@ export const ContextProvider = ({
         const mockMsg: SSEMessage = {
           id: mockIdCounter,
           title: `Simulated Page ${mockIdCounter}`,
-          url: mockIdCounter === 1 ? seed[0] : `http://localhost:3000/page/${mockIdCounter}`,
+          url: mockIdCounter === 1 ? appState.seed : `http://localhost:3000/page/${mockIdCounter}`,
           errors: Math.random() > 0.9 ? ["Simulated 404"] : null,
           neighbors: neighbors,
           responseTime: 200,
@@ -232,7 +233,8 @@ export const ContextProvider = ({
     } else {
       // @ts-ignore
       const url = new URL("/crawl", document.location);
-      url.searchParams.append("seeds", seed);
+      url.searchParams.append("seeds", appState.seed);
+      url.searchParams.append("depth", appState.depth.toString());
       const evtSource = new EventSource(url.toString());
       setLoading(true);
 
@@ -254,11 +256,10 @@ export const ContextProvider = ({
     }
 
     return cleanup;
-  }, [seed]);
+  }, [appState]);
 
   const contextValue: ContextType = {
     appState, setAppState,
-    seed, setSeed,
     colorList,
     loading,
     data,

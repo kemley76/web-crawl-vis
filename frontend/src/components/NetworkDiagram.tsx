@@ -113,8 +113,8 @@ export const NetworkDiagram = ({
       .radius((d: any) => (d.radius || 20) + NODE_PADDING) 
       .iterations(1)
     )
-    .force("x", d3.forceX(width / 2).strength(0.004))
-    .force("y", d3.forceY(height / 2).strength(0.004))
+    .force("x", d3.forceX(width / 2).strength(0))
+    .force("y", d3.forceY(height / 2).strength(0))
     .on("tick", draw)
   
 
