@@ -3,6 +3,7 @@ package web
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -23,6 +24,15 @@ func RunServer() {
 
 func crawl(rw http.ResponseWriter, r *http.Request) {
 	seeds := strings.Split(r.URL.Query().Get("seeds"), ",")
+	depth := strings.Split(r.URL.Query().Get("depth"), ",")
+	depthParsed := 1
+	if len(depth) > 0 {
+		var err error
+		depthParsed, err = strconv.Atoi(depth[0])
+		if err != nil {
+			depthParsed = 1
+		}
+	}
 	fmt.Println("SEEDS: ", seeds)
 	rw.Header().Set("Content-Type", "text/event-stream")
 	rw.Header().Set("Transfer-Encoding", "chunked")
@@ -30,5 +40,5 @@ func crawl(rw http.ResponseWriter, r *http.Request) {
 	rw.Header().Set("Connection", "keep-alive")
 
 	crawler := crawler.NewCrawler(rw, seeds)
-	crawler.Crawl(1, r.Context().Done())
+	crawler.Crawl(depthParsed, r.Context().Done())
 }
