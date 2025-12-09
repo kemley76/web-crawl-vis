@@ -1,11 +1,11 @@
 import useCache from "@/hooks/cache";
 import { type Data, type Link, type Node } from "@/lib/data";
-import * as d3 from "d3";
 import { createContext, useContext, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 type ContextType = {
   appState: "graph" | "home";
   seed: string;
+  colorList: [string, string][],
   loading: boolean;
   data: Data;
   setAppState: Dispatch<SetStateAction<"graph" | "home">>,
@@ -14,14 +14,12 @@ type ContextType = {
   getParent: (nodeId: string) => string | null;
 };
 
-const COLORS = ["#5c33ff", "#ff33aa", "#f59e0b"];
-const colorScale = d3.scaleOrdinal<number, string>()
-  .domain([0, 1, 2])
-  .range(COLORS);
+const DEFAULT_COLOR = "#5c33ff"
 
 const defaultContext: ContextType = {
   appState: "home",
   seed: "https://go.dev/",
+  colorList: [],
   loading: false,
   data: {
     nodes: [],
@@ -56,6 +54,7 @@ export const ContextProvider = ({
   const [appState, setAppState] = useState<"graph" | "home">(defaultContext.appState);
   const [seed, setSeed] = useState<string>(defaultContext.seed);
   const [data, setData] = useState<Data>(defaultContext.data);
+  const [colorList, setColorList] = useState<[string, string][]>(defaultContext.colorList);
   const [loading, setLoading] = useState(defaultContext.loading);
   const nodesRef = useRef<Map<number, Node>>(new Map());
   const edgesRef = useRef<Map<string, Link>>(new Map());
@@ -74,20 +73,37 @@ export const ContextProvider = ({
   };
 
   const getColorForUrl = useCache((url: string) => {
+    let color = "#"
+    let domain = "unknown domain"
     try {
       const { hostname } = new URL(url);
       const parts = hostname.split(".");
-      const domain = parts.length > 2 ? parts.slice(-2).join(".") : hostname;
+      domain = parts.length > 2 ? parts.slice(-2).join(".") : hostname;
 
+      // random color function found: https://stackoverflow.com/questions/3426404/create-a-hexadecimal-colour-based-on-a-string-with-javascript
       let hash = 0;
-      for (let i = 0; i < domain.length; i++) {
-        hash += Math.pow(domain.charCodeAt(i), i + 1) / 2;
+      domain.split('').forEach(char => {
+        hash = char.charCodeAt(0) + ((hash << 5) - hash)
+      })
+      for (let i = 0; i < 3; i++) {
+        const value = (hash >> (i * 8)) & 0xff
+        color += value.toString(16).padStart(2, '0')
       }
-
-      return colorScale(hash);
     } catch {
-      return colorScale(0);
+      color = DEFAULT_COLOR;
     }
+
+
+    setColorList(oldList => {
+      if (!oldList.find(([_, d]) => domain === d)) {
+        return [...oldList, [color, domain]]
+      }
+      else {
+        return oldList
+      }
+    })
+
+    return color;
   })
 
   const getChildren = (nodeId: string) => {
@@ -127,7 +143,7 @@ export const ContextProvider = ({
           id: adjNode.toString(),
           title: "unknown",
           url: "unknown",
-          color: colorScale(0),
+          color: DEFAULT_COLOR,
           group: "1",
           type: "normal",
           radius: BASE_RADIUS,
@@ -243,6 +259,7 @@ export const ContextProvider = ({
   const contextValue: ContextType = {
     appState, setAppState,
     seed, setSeed,
+    colorList,
     loading,
     data,
     getChildren,

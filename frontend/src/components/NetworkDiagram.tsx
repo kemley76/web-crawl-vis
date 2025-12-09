@@ -36,6 +36,7 @@ export const NetworkDiagram = ({
   const links = useMemo(() => data.links.map((d) => ({ ...d })), [data]);
   const nodes = useMemo(() => data.nodes.map((d) => ({ ...d })), [data]);
   const nodesRef = useRef<Node[]>([]);
+  const [colorList, setColorList] = useState<{color: string, label: string}[]>([]);
 
   const hoveredChildren = useMemo(() => {
     return appContext.getChildren(hoveredNodeId ?? "0");
@@ -49,7 +50,7 @@ export const NetworkDiagram = ({
 
     if (context && nodesRef.current.length > 0) {
       requestAnimationFrame(() => {
-        drawNetwork(context, width, height, nodesRef.current, links, zoomRef.current, hoveredNodeId, hoveredChildren)
+        drawNetwork(context, width, height, nodesRef.current, links, zoomRef.current, hoveredNodeId, setColorList, hoveredChildren)
       })
     }
 
@@ -99,7 +100,7 @@ export const NetworkDiagram = ({
 
           nodePositions.current.set(node.id, pos as [number, number]);
       });
-      drawNetwork(context, width, height, adjustedNodes, links, zoomRef.current, hoverStateRef.current.id, hoverStateRef.current.children)
+      drawNetwork(context, width, height, adjustedNodes, links, zoomRef.current, hoverStateRef.current.id, setColorList, hoverStateRef.current.children)
     }
 
     simulationRef.current = d3.forceSimulation<Node, Link>(adjustedNodes)
@@ -164,7 +165,7 @@ export const NetworkDiagram = ({
       } else {
         setHoveredNodeId(null);
       }
-    }, 50)
+    }, 10)
 
     d3.select(canvasRef.current).on("mousemove", handleMouseMove);
   }, []);
@@ -190,6 +191,7 @@ export const NetworkDiagram = ({
           color: GREEN,
           label: "Root Node",
         },
+        ...colorList
       ]}/>
       <GridBackground ref={gridRef}/>
       <canvas

@@ -1,5 +1,6 @@
 // source: https://codesandbox.io/p/sandbox/bold-resonance-p4hfq4
 
+import type { Dispatch, SetStateAction } from "react";
 import { type Link, type Node } from "./data";
 import * as d3 from "d3";
 
@@ -16,8 +17,12 @@ export const drawNetwork = (
   links: Link[],
   transform: d3.ZoomTransform,
   hoveredNode: string | null,
+  setColorsList: Dispatch<SetStateAction<{
+    color: string;
+    label: string;
+  }[]>>,
   hoveredChildren?: Set<string>,
-) => {
+  ) => {
   context.save();
   context.clearRect(0, 0, width, height);
   context.translate(transform.x, transform.y);
@@ -109,6 +114,8 @@ export const drawNetwork = (
   }
 
   context.globalAlpha = 1;
+  const colorList = [];
+  const domainSet = new Set<string>();
 
   const showLabels = transform.k > 1.2;
   // if we need more optimization we can batch the different node types too
@@ -121,17 +128,36 @@ export const drawNetwork = (
     
     const hovered = (hoveredNode === node.id || hoveredChildren?.has(node.id));
     const isPrev = prevNodes.has(node.id);
+    const focused = hovered || isPrev;
 
     context.beginPath();
     context.moveTo(node.x + node.radius, node.y);
 
-    let nodeColor = hovered || isPrev ? node.color : `${node.color}77`
+    // replace this with focused to show all focused nodes on the legend
+    if (hoveredNode === node.id) {
+      try {
+        const { hostname } = new URL(node.url);
+        const parts = hostname.split(".");
+        let domain = parts.length > 2 ? parts.slice(-2).join(".") : hostname;
+
+        if (!domainSet.has(domain)) {
+          colorList.push({
+            color: node.color,
+            label: domain
+          });
+          domainSet.add(domain);
+        }
+      }
+      catch (err) {}
+    }
+
+    let nodeColor = focused ? node.color : `${node.color}77`
     
     if (node.type === "error") {
-      nodeColor = hovered || isPrev ? RED : `${RED}77`;
+      nodeColor = focused ? RED : `${RED}77`;
     }
     else if (node.type === "root") {
-      nodeColor = hovered || isPrev ? GREEN : `${GREEN}77`;
+      nodeColor = focused ? GREEN : `${GREEN}77`;
     }
 
     context.fillStyle = nodeColor;
@@ -150,7 +176,7 @@ export const drawNetwork = (
     context.stroke();
     context.strokeStyle = "#eeeeee"
 
-    if (showLabels || hovered || isPrev) {
+    if (showLabels || focused) {
         context.fillStyle = "#fff";
       context.textAlign = "center";
       context.textBaseline = "middle";
@@ -159,5 +185,6 @@ export const drawNetwork = (
     }
   }
 
+  setColorsList(colorList);
   context.restore();
 };
