@@ -1,23 +1,34 @@
+import useCache from "@/hooks/cache";
 import { type Data, type Link, type Node } from "@/lib/data";
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import * as d3 from "d3";
+import { createContext, useContext, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 type ContextType = {
-  seeds: string[];
+  appState: "graph" | "home";
+  seed: string;
+  loading: boolean;
   data: Data;
-  addSeed: (newSeed: string) => void;
-  removeSeed: (seedToRemove: string) => void;
+  setAppState: Dispatch<SetStateAction<"graph" | "home">>,
+  setSeed: Dispatch<SetStateAction<string>>,
   getChildren: (nodeId: string) => Set<string> | undefined;
   getParent: (nodeId: string) => string | null;
 };
 
+const COLORS = ["#5c33ff", "#ff33aa", "#f59e0b"];
+const colorScale = d3.scaleOrdinal<number, string>()
+  .domain([0, 1, 2])
+  .range(COLORS);
+
 const defaultContext: ContextType = {
-  seeds: ["https://go.dev/"],
+  appState: "home",
+  seed: "https://go.dev/",
+  loading: false,
   data: {
     nodes: [],
     links: [],
   },
-  addSeed: () => {},
-  removeSeed: () => {},
+  setAppState: () => {},
+  setSeed: () => {},
   getChildren: () => undefined,
   getParent: () => null,
 };
@@ -42,26 +53,13 @@ export const ContextProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const [seeds, setSeeds] = useState<string[]>(defaultContext.seeds);
+  const [appState, setAppState] = useState<"graph" | "home">(defaultContext.appState);
+  const [seed, setSeed] = useState<string>(defaultContext.seed);
   const [data, setData] = useState<Data>(defaultContext.data);
+  const [loading, setLoading] = useState(defaultContext.loading);
   const nodesRef = useRef<Map<number, Node>>(new Map());
   const edgesRef = useRef<Map<string, Link>>(new Map());
   const adjList = useRef<Map<string, Set<string>>>(new Map());
-
-  const addSeed = (newSeed: string) => {
-    setSeeds((oldSeeds) => {
-      const newSeeds = oldSeeds.filter((seed) => seed != newSeed);
-      newSeeds.push(newSeed);
-      return newSeeds;
-    });
-  };
-
-  const removeSeed = (seedToRemove: string) => {
-    setSeeds((oldSeeds) => {
-      const newSeeds = oldSeeds.filter((seed) => seed != seedToRemove);
-      return newSeeds;
-    });
-  };
 
   const getParent = (nodeId: string) => {
     const edge = data.links.find(
@@ -75,6 +73,23 @@ export const ContextProvider = ({
     return parent;
   };
 
+  const getColorForUrl = useCache((url: string) => {
+    try {
+      const { hostname } = new URL(url);
+      const parts = hostname.split(".");
+      const domain = parts.length > 2 ? parts.slice(-2).join(".") : hostname;
+
+      let hash = 0;
+      for (let i = 0; i < domain.length; i++) {
+        hash += Math.pow(domain.charCodeAt(i), i + 1) / 2;
+      }
+
+      return colorScale(hash);
+    } catch {
+      return colorScale(0);
+    }
+  })
+
   const getChildren = (nodeId: string) => {
     return adjList.current.get(nodeId);
   }
@@ -82,15 +97,14 @@ export const ContextProvider = ({
   const handleIncomingMessage = (message: SSEMessage) => {
     const { id, neighbors, errors, title, url } = message;
 
-    const root = seeds.some(val => val === url);
-
-    console.log(root)
+    const root = seed === url;
 
     const replaceNode = nodesRef.current.has(id)
     const newNode: Node | undefined = {
       id: id.toString(),
-      title,
+      title: title || (errors|| [""])[0],
       url,
+      color: getColorForUrl(url),
       group: "1",
       type: errors ? "error" : (root ? "root" : "normal"),
       radius: BASE_RADIUS,
@@ -113,6 +127,7 @@ export const ContextProvider = ({
           id: adjNode.toString(),
           title: "unknown",
           url: "unknown",
+          color: colorScale(0),
           group: "1",
           type: "normal",
           radius: BASE_RADIUS,
@@ -162,8 +177,6 @@ export const ContextProvider = ({
     let cleanup = () => {};
 
     if (isDev) {
-      console.log("Starting DEV MODE simulation...");
-      
       let mockIdCounter = 0;
       
       const interval = setInterval(() => {
@@ -186,7 +199,7 @@ export const ContextProvider = ({
         const mockMsg: SSEMessage = {
           id: mockIdCounter,
           title: `Simulated Page ${mockIdCounter}`,
-          url: mockIdCounter === 1 ? seeds[0] : `http://localhost:3000/page/${mockIdCounter}`,
+          url: mockIdCounter === 1 ? seed[0] : `http://localhost:3000/page/${mockIdCounter}`,
           errors: Math.random() > 0.9 ? ["Simulated 404"] : null,
           neighbors: neighbors,
           responseTime: 200,
@@ -203,12 +216,13 @@ export const ContextProvider = ({
     } else {
       // @ts-ignore
       const url = new URL("/crawl", document.location);
-      url.searchParams.append("seeds", seeds.join(","));
+      url.searchParams.append("seeds", seed);
       const evtSource = new EventSource(url.toString());
+      setLoading(true);
 
       evtSource.addEventListener("close", (_) => {
         evtSource.close();
-        console.log("Done crawling!");
+        setLoading(false);
       });
 
       evtSource.addEventListener("data", (event) => {
@@ -224,13 +238,13 @@ export const ContextProvider = ({
     }
 
     return cleanup;
-  }, [seeds]);
+  }, [seed]);
 
   const contextValue: ContextType = {
-    seeds,
+    appState, setAppState,
+    seed, setSeed,
+    loading,
     data,
-    addSeed,
-    removeSeed,
     getChildren,
     getParent,
   };

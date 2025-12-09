@@ -3,10 +3,10 @@
 import { type Link, type Node } from "./data";
 import * as d3 from "d3";
 
-const blue = "#3b82f6";
-const yellow = "#ffbb10";
-const red = "#f5384a";
-const green = "#00d32d";
+export const BLUE = "#33d9ff";
+export const YELLOW = "#ffbb10";
+export const RED = "#f5384a";
+export const GREEN = "#00d32d";
 
 export const drawNetwork = (
   context: CanvasRenderingContext2D,
@@ -29,12 +29,22 @@ export const drawNetwork = (
   const prevLinks = [];
   const prevNodes = new Set<string>();
 
+  // screen bounds
+  const minX = -transform.x / transform.k - 50;
+  const maxX = (width - transform.x) / transform.k + 50;
+  const minY = -transform.y / transform.k - 50;
+  const maxY = (height - transform.y) / transform.k + 50;
+
   for (let i = 0; i < links.length; i++) {
     const link = links[i];
     const source = (link.source as any as Node)
     const target = (link.target as any as Node)
 
     if (!source.x || !target.x || !source.y || !target.y) continue;
+    if ((source.x < minX && target.x < minX) || (source.x > maxX && target.x > maxX) ||
+        (source.y < minY && target.y < minY) || (source.y > maxY && target.y > maxY)) {
+        continue;
+    }
 
     const hovered = source.id === hoveredNode || target.id === hoveredNode;
     const prev = source.id === hoveredNode ? target.id : source.id;
@@ -73,7 +83,7 @@ export const drawNetwork = (
       context.lineTo(target.x, target.y);
     }
 
-    context.strokeStyle = blue;
+    context.strokeStyle = BLUE;
     context.lineWidth = 2 / transform.k;
     context.globalAlpha = 1;
     context.stroke();
@@ -92,7 +102,7 @@ export const drawNetwork = (
       context.lineTo(target.x, target.y);
     }
 
-    context.strokeStyle = yellow;
+    context.strokeStyle = YELLOW;
     context.lineWidth = 2 / transform.k;
     context.globalAlpha = 1;
     context.stroke();
@@ -100,24 +110,28 @@ export const drawNetwork = (
 
   context.globalAlpha = 1;
 
-  const showLabels = true;
+  const showLabels = transform.k > 1.2;
   // if we need more optimization we can batch the different node types too
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
     if (!node.x || !node.y) continue;
+    if (node.x < minX || node.x > maxX || node.y < minY || node.y > maxY) {
+        continue;
+    }
+    
     const hovered = (hoveredNode === node.id || hoveredChildren?.has(node.id));
     const isPrev = prevNodes.has(node.id);
 
     context.beginPath();
     context.moveTo(node.x + node.radius, node.y);
 
-    let nodeColor = hovered || isPrev ? blue : `${blue}44`
+    let nodeColor = hovered || isPrev ? node.color : `${node.color}77`
     
     if (node.type === "error") {
-      nodeColor = hovered || isPrev ? red : `${red}44`;
+      nodeColor = hovered || isPrev ? RED : `${RED}77`;
     }
     else if (node.type === "root") {
-      nodeColor = hovered || isPrev ? green : `${green}44`;
+      nodeColor = hovered || isPrev ? GREEN : `${GREEN}77`;
     }
 
     context.fillStyle = nodeColor;
@@ -126,12 +140,11 @@ export const drawNetwork = (
 
     let outlineColor = "eeeeee"
     if (isPrev) {
-      outlineColor = yellow;
+      outlineColor = YELLOW;
     }
     else if (hovered) {
-      outlineColor = blue
+      outlineColor = BLUE
     }
-    console.log(node.id, outlineColor)
     context.strokeStyle = outlineColor;
     context.lineWidth = 2;
     context.stroke();
@@ -142,7 +155,7 @@ export const drawNetwork = (
       context.textAlign = "center";
       context.textBaseline = "middle";
       context.font = "bold 10px sans-serif";
-        context.fillText(node.id, node.x, node.y);
+        context.fillText(node.title, node.x, node.y);
     }
   }
 

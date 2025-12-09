@@ -2,9 +2,12 @@
 // source: https://codesandbox.io/p/sandbox/bold-resonance-p4hfq4
 import * as d3 from "d3";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { drawNetwork } from "@/lib/drawNetwork";
+import { BLUE, drawNetwork, GREEN, RED, YELLOW } from "@/lib/drawNetwork";
 import { type Data, type Link, type Node } from "@/lib/data";
 import { useAppContext } from "@/providers/contextProvider";
+import Legend from "./Legend";
+import { GridBackground } from "./ui/grid_background";
+import throttle from "lodash.throttle";
 
 const NODE_PADDING = 5
 
@@ -26,6 +29,7 @@ export const NetworkDiagram = ({
 
   const nodePositions = useRef<Map<any, [number, number]>>(new Map<any, [number, number]>());
   const zoomRef = useRef(d3.zoomIdentity);
+  const gridRef = useRef<HTMLDivElement>(null);
   const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const appContext = useAppContext();
@@ -115,8 +119,15 @@ export const NetworkDiagram = ({
 
     const zoom = d3.zoom<HTMLCanvasElement, unknown>()
     .scaleExtent([0.1, 8])
-    .on("zoom", ({transform}) => {
+    .on("zoom", ({transform}: {transform: d3.ZoomTransform}) => {
       zoomRef.current = transform;
+
+      if (gridRef.current) {
+        gridRef.current.style.backgroundSize = `${transform.k * 40}px ${transform.k * 40}px`;
+        gridRef.current.style.backgroundPositionX = `${transform.x}px`
+        gridRef.current.style.backgroundPositionY = `${transform.y}px`
+      }
+
       draw();
     })
     
@@ -130,7 +141,7 @@ export const NetworkDiagram = ({
   useEffect(() => {
     if (!canvasRef.current) return;
 
-    d3.select(canvasRef.current).on("mousemove", (event) => {
+    const handleMouseMove = throttle((event: MouseEvent) => {
       let mouseX = event.clientX;
       let mouseY = event.clientY;
 
@@ -153,11 +164,34 @@ export const NetworkDiagram = ({
       } else {
         setHoveredNodeId(null);
       }
-    })
+    }, 50)
+
+    d3.select(canvasRef.current).on("mousemove", handleMouseMove);
   }, []);
 
   return (
-    <div>
+    <div className="z-100">
+      <Legend legendItems={[
+        {
+          color: BLUE,
+          label: "Referenced in",
+          hollow: true,
+        },
+        {
+          color: YELLOW,
+          label: "References",
+          hollow: true,
+        },
+        {
+          color: RED,
+          label: "Error Crawling",
+        },
+        {
+          color: GREEN,
+          label: "Root Node",
+        },
+      ]}/>
+      <GridBackground ref={gridRef}/>
       <canvas
       ref={canvasRef}
       />
