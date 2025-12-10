@@ -71,15 +71,25 @@ export const ContextProvider = ({
     return parent;
   };
 
-  const getColorForUrl = useCache((url: string) => {
-    let color = "#"
-    let domain = "unknown domain"
+  const getDomain = (url: string) => {
     try {
       const { hostname } = new URL(url);
       const parts = hostname.split(".");
-      domain = parts.length > 2 ? parts.slice(-2).join(".") : hostname;
+      return parts.length > 2 ? parts.slice(-2).join(".") : hostname;
+    } catch (e) {
+      return null
+    }
+    
+  }
 
-      // random color function found: https://stackoverflow.com/questions/3426404/create-a-hexadecimal-colour-based-on-a-string-with-javascript
+  const getColorForUrl = useCache((url: string) => {
+    let color = "#"
+    let domain = getDomain(url)
+    if (!domain) {
+      domain = "unknown domain"
+      color = DEFAULT_COLOR
+    }
+    else {
       let hash = 0;
       domain.split('').forEach(char => {
         hash = char.charCodeAt(0) + ((hash << 5) - hash)
@@ -88,10 +98,7 @@ export const ContextProvider = ({
         const value = (hash >> (i * 8)) & 0xff
         color += value.toString(16).padStart(2, '0')
       }
-    } catch {
-      color = DEFAULT_COLOR;
     }
-
 
     setColorList(oldList => {
       if (!oldList.find(([_, d]) => domain === d)) {
@@ -120,7 +127,7 @@ export const ContextProvider = ({
       title: title || (errors|| [""])[0],
       url,
       color: getColorForUrl(url),
-      group: "1",
+      group: getDomain(url) ?? "0",
       type: errors ? "error" : (root ? "root" : "normal"),
       radius: BASE_RADIUS,
     };

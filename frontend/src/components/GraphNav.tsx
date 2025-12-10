@@ -10,13 +10,18 @@ const GraphNav = () => {
     }
 
     return (
-        <div className='absolute top-0 left-0 m-2 rounded-md p-2 gap-1 justify-between items-center bg-gray-950/20 outline h-auto w-auto grid grid-cols-[20%_80%]'>
-            <Button variant="ghost" onClick={handleBackToHome}><ArrowBigLeft className="text-white"/> Back to Home</Button>
-            <div className='text-primary-foreground'></div>
-            <h1 className="text-white font-bold">Seed URL:</h1>
-            <div className='text-primary-foreground'>{appContext.appState.seed}</div>
-            <h1 className="text-white font-bold">Crawl Depth:</h1>
-            <div className='text-primary-foreground'>{appContext.appState.depth}</div>
+        <div className='absolute top-0 left-0 m-2 rounded-md bg-neutral-900/50 outline h-auto w-fit flex gap-4 p-4 items-center justify-between'>
+            <Button variant="outline" className="text-white w-fit" onClick={handleBackToHome}><ArrowBigLeft/></Button>
+            <div className="w-full h-full flex flex-col p-2">
+                <div className="flex justify-between">
+                    <h1 className="text-white font-bold">Seed URL:</h1>
+                    <div className='text-primary-foreground text-right'>{appContext.appState.seed.length > 50 ? appContext.appState.seed.substring(0, 50) + "..." : appContext.appState.seed}</div>
+                </div>
+                <div className="flex justify-between">
+                    <h1 className="text-white font-bold">Crawl Depth:</h1>
+                    <div className='text-primary-foreground text-right'>{appContext.appState.depth}</div>
+                </div>
+            </div>
         </div>
     )
 }

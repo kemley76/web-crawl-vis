@@ -45,6 +45,7 @@ export const drawNetwork = (
     const source = (link.source as any as Node)
     const target = (link.target as any as Node)
 
+    if (source.title === "unknown" || target.title === "unknown") continue;
     if (!source.x || !target.x || !source.y || !target.y) continue;
     if ((source.x < minX && target.x < minX) || (source.x > maxX && target.x > maxX) ||
         (source.y < minY && target.y < minY) || (source.y > maxY && target.y > maxY)) {
@@ -121,6 +122,7 @@ export const drawNetwork = (
   // if we need more optimization we can batch the different node types too
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
+    if (node.title === "unknown") continue;
     if (!node.x || !node.y) continue;
     if (node.x < minX || node.x > maxX || node.y < minY || node.y > maxY) {
         continue;
