@@ -16,8 +16,8 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-const MAX_CONCURRENT_REQS = 5
-const ARTIFICIAL_DELAY = time.Millisecond * 300
+const MAX_CONCURRENT_REQS = 2
+const ARTIFICIAL_DELAY = time.Millisecond * 400
 
 var client http.Client
 
@@ -108,6 +108,9 @@ func (c *crawler) enqueuePage(rawURL string, depth int) (uint64, error) {
 		return 0, err
 	}
 
+	c.queueLock.Lock()
+	defer c.queueLock.Unlock()
+
 	if id, ok := c.getNodeID(url.String()); ok {
 		return id, nil
 	}
@@ -116,9 +119,6 @@ func (c *crawler) enqueuePage(rawURL string, depth int) (uint64, error) {
 	id := c.id_counter.Add(1)
 	c.visitedURLs.Store(url.String(), id)
 	c.wg.Add(1)
-
-	c.queueLock.Lock()
-	defer c.queueLock.Unlock()
 
 	q, ok := c.queues[url.Host]
 	if ok {
