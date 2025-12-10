@@ -57,6 +57,15 @@ export const ContextProvider = ({
 
   const setAppState = (newSeed: string, newDepth: number, page: "home" | "graph") => {
     _setAppState({ seed: newSeed, depth: newDepth, page });
+
+    if (page === "home") {
+      // Reset graph data when going back to home
+      nodesRef.current = new Map();
+      edgesRef.current = new Map();
+      adjList.current = new Map();
+      setData({ nodes: [], links: [] });
+      setColorList([]);
+    }
   };
 
   const getParent = (nodeId: string) => {
@@ -195,74 +204,28 @@ export const ContextProvider = ({
   useEffect(() => {
     if (appState.page !== "graph") return;
 
-    //@ts-ignore
-    const isDev = process.env.NODE_ENV === "development";
+    // @ts-ignore
+    const url = new URL("/crawl", document.location);
+    url.searchParams.append("seeds", appState.seed);
+    url.searchParams.append("depth", appState.depth.toString());
+    const evtSource = new EventSource(url.toString());
+    setLoading(true);
 
-    let cleanup = () => {};
+    evtSource.addEventListener("close", (_) => {
+      evtSource.close();
+      setLoading(false);
+    });
 
-    if (isDev) {
-      let mockIdCounter = 0;
-      
-      const interval = setInterval(() => {
-        mockIdCounter++;
-        
-        const existingIds = Array.from(nodesRef.current.keys());
-        const neighbors: number[] = []
+    evtSource.addEventListener("data", (event) => {
+      try {
+        const msg = JSON.parse(event.data) as SSEMessage;
+        handleIncomingMessage(msg);
+      } catch (e) {
+        console.error("Failed to parse SSE message", e);
+      }
+    });
 
-        for (let i = 0; i < Math.floor(Math.random() * 100); i++) {
-          const randomNeighborId = existingIds.length > 0 
-              ? existingIds[Math.floor(Math.random() * existingIds.length)] 
-              : null;
-          if (randomNeighborId == null) break;
-
-          if (!neighbors.find((v) => v == randomNeighborId))
-            neighbors.push(randomNeighborId)
-        }
-
-        // 2. Generate Mock Message
-        const mockMsg: SSEMessage = {
-          id: mockIdCounter,
-          title: `Simulated Page ${mockIdCounter}`,
-          url: mockIdCounter === 1 ? appState.seed : `http://localhost:3000/page/${mockIdCounter}`,
-          errors: Math.random() > 0.9 ? ["Simulated 404"] : null,
-          neighbors: neighbors,
-          responseTime: 200,
-        };
-
-        handleIncomingMessage(mockMsg);
-
-        if (mockIdCounter > 100) clearInterval(interval);
-
-      }, 200);
-
-      cleanup = () => clearInterval(interval);
-
-    } else {
-      // @ts-ignore
-      const url = new URL("/crawl", document.location);
-      url.searchParams.append("seeds", appState.seed);
-      url.searchParams.append("depth", appState.depth.toString());
-      const evtSource = new EventSource(url.toString());
-      setLoading(true);
-
-      evtSource.addEventListener("close", (_) => {
-        evtSource.close();
-        setLoading(false);
-      });
-
-      evtSource.addEventListener("data", (event) => {
-        try {
-          const msg = JSON.parse(event.data) as SSEMessage;
-          handleIncomingMessage(msg);
-        } catch (e) {
-          console.error("Failed to parse SSE message", e);
-        }
-      });
-
-      cleanup = () => evtSource.close();
-    }
-
-    return cleanup;
+    return () => evtSource.close();
   }, [appState]);
 
   const contextValue: ContextType = {
