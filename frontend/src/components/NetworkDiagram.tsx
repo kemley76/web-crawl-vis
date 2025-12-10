@@ -9,8 +9,8 @@ import Legend from "./Legend";
 import { GridBackground } from "./ui/grid_background";
 import throttle from "lodash.throttle";
 import GraphNav from "./GraphNav";
-
-const NODE_PADDING = 5
+import forceCollide from "@/lib/forceCollide";
+import forceCluster from "@/lib/forceCluster";
 
 type NetworkDiagramProps = {
   width: number;
@@ -88,8 +88,8 @@ export const NetworkDiagram = ({
 
       return {
           ...node,
-          x: x + (Math.random() - 0.5) * 20 ,
-          y: y + (Math.random() - 0.5) * 20 ,
+          x: x + (Math.random() - 0.5) * 50 ,
+          y: y + (Math.random() - 0.5) * 50 ,
       };
     });
 
@@ -105,17 +105,21 @@ export const NetworkDiagram = ({
     }
 
     simulationRef.current = d3.forceSimulation<Node, Link>(adjustedNodes)
+    .force("charge", d3.forceManyBody()
+      .strength(-1000)
+      .distanceMax(1000)
+    )
     .force("link", d3.forceLink<Node, Link>(links)
       .id((d) => d.id)
-      .distance(450)
-      .iterations(0.5)
-    )
-    .force("collide", d3.forceCollide()
-      .radius((d: any) => (d.radius || 20) + NODE_PADDING) 
+      .distance(300)
       .iterations(1)
     )
-    .force("x", d3.forceX(width / 2).strength(0))
-    .force("y", d3.forceY(height / 2).strength(0))
+    .force("cluster", forceCluster())
+    .force("collide", forceCollide())
+    .force("center", d3.forceCenter(width / 2, height / 2))
+    .force("x", d3.forceX(width / 2).strength(0.02))
+    .force("y", d3.forceY(height / 2).strength(0.02))
+    .alphaDecay(0.02)
     .on("tick", draw)
   
 
