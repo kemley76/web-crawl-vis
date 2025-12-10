@@ -16,13 +16,13 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-const MAX_CONCURRENT_REQS = 3
+const MAX_CONCURRENT_REQS = 5
 const ARTIFICIAL_DELAY = time.Millisecond * 300
 
 var client http.Client
 
 func init() {
-	client = http.Client{Timeout: time.Millisecond * 1500}
+	client = http.Client{Timeout: time.Second}
 }
 
 type crawler struct {
@@ -146,6 +146,8 @@ func (c *crawler) CrawlHost(hostname string, depth int) {
 			break
 		}
 
+		c.sem.Acquire(context.Background(), 1)
+		time.Sleep(max(waittime.CrawlDelay, ARTIFICIAL_DELAY))
 		if !robotsData.TestAgent(url, "Go-http-client/1.1") {
 			id, ok := c.getNodeID(url)
 			if !ok {
@@ -156,10 +158,9 @@ func (c *crawler) CrawlHost(hostname string, depth int) {
 				URL:    url,
 				Errors: []string{"Path blocked by robots.txt"},
 			}
+			c.sem.Release(1)
 			continue // we can't crawl this page
 		}
-		c.sem.Acquire(context.Background(), 1)
-		time.Sleep(max(waittime.CrawlDelay, ARTIFICIAL_DELAY))
 		go func() {
 			defer c.sem.Release(1)
 			c.crawlPage(url, hostname, depth)
