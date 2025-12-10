@@ -16,13 +16,13 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-const MAX_CONCURRENT_REQS_PER_HOST = 10
-const ARTIFICIAL_DELAY = time.Millisecond * 250
+const MAX_CONCURRENT_REQS = 3
+const ARTIFICIAL_DELAY = time.Millisecond * 300
 
 var client http.Client
 
 func init() {
-	client = http.Client{Timeout: time.Second * 3}
+	client = http.Client{Timeout: time.Millisecond * 1500}
 }
 
 type crawler struct {
@@ -36,6 +36,7 @@ type crawler struct {
 	connectionAlive bool
 	wg              sync.WaitGroup
 	id_counter      atomic.Uint64 // Used to create unique ids for each URL
+	sem             *semaphore.Weighted
 }
 
 type queueEntry struct {
@@ -51,6 +52,7 @@ func NewCrawler(rw http.ResponseWriter, seedURLs []string) *crawler {
 		dataChannel:     make(chan pageData),
 		queues:          make(map[string][]queueEntry), // maps domains to URLs
 		connectionAlive: true,
+		sem:             semaphore.NewWeighted(MAX_CONCURRENT_REQS),
 	}
 }
 
@@ -138,7 +140,6 @@ func (c *crawler) CrawlHost(hostname string, depth int) {
 	waittime := robotsData.FindGroup("")
 	fmt.Println("Crawling host: ", hostname)
 
-	sem := semaphore.NewWeighted(MAX_CONCURRENT_REQS_PER_HOST)
 	for c.connectionAlive {
 		url, depth := c.getNextURL(hostname)
 		if url == "" {
@@ -157,12 +158,12 @@ func (c *crawler) CrawlHost(hostname string, depth int) {
 			}
 			continue // we can't crawl this page
 		}
-		sem.Acquire(context.Background(), 1)
+		c.sem.Acquire(context.Background(), 1)
+		time.Sleep(max(waittime.CrawlDelay, ARTIFICIAL_DELAY))
 		go func() {
-			defer sem.Release(1)
+			defer c.sem.Release(1)
 			c.crawlPage(url, hostname, depth)
 		}()
-		time.Sleep(waittime.CrawlDelay + ARTIFICIAL_DELAY)
 	}
 }
 
@@ -209,6 +210,10 @@ func (c *crawler) crawlPage(rawURL, hostname string, depth int) {
 		pd.Neighbors = make([]uint64, 0, len(parseData.Links))
 		for _, link := range parseData.Links {
 			url, err := cleanURL(link, hostname)
+
+			/*if url.Host == hostname {
+				continue
+			}*/
 			if err != nil {
 				continue
 			}
