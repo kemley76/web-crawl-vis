@@ -8,6 +8,7 @@ import { useAppContext } from "@/providers/contextProvider";
 import Legend from "./Legend";
 import { GridBackground } from "./ui/grid_background";
 import throttle from "lodash.throttle";
+import GraphNav from "./GraphNav";
 
 const NODE_PADDING = 5
 
@@ -172,6 +173,10 @@ export const NetworkDiagram = ({
 
   return (
     <div className="z-100">
+      {
+        appContext.appState.page === "graph" &&
+        <GraphNav />
+      }
       <Legend legendItems={[
         {
           color: BLUE,
