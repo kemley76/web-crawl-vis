@@ -12,6 +12,7 @@ import GraphNav from "./GraphNav";
 import forceCollide from "@/lib/forceCollide";
 import forceCluster from "@/lib/forceCluster";
 import forceInertia from "@/lib/forceInertia";
+import NodeTooltip from "./NodeTooltip";
 
 type NetworkDiagramProps = {
   width: number;
@@ -193,6 +194,10 @@ export const NetworkDiagram = ({
       {
         appContext.appState.page === "graph" &&
         <GraphNav />
+      }
+      {
+        hoveredNodeId &&
+        <NodeTooltip data={nodes.find(n => n.id === hoveredNodeId)!} />
       }
       <Legend legendItems={[
         {

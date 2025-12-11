@@ -135,7 +135,6 @@ export const drawNetwork = (
     context.beginPath();
     context.moveTo(node.x + node.radius, node.y);
 
-    // replace this with focused to show all focused nodes on the legend
     if (hoveredNode === node.id) {
       try {
         const { hostname } = new URL(node.url);
@@ -180,10 +179,29 @@ export const drawNetwork = (
 
     if (showLabels || focused) {
         context.fillStyle = "#fff";
-      context.textAlign = "center";
-      context.textBaseline = "middle";
-      context.font = "bold 10px sans-serif";
-        context.fillText(node.title, node.x, node.y);
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+
+        const fontSize = Math.floor(node.radius * 0.25);
+        context.font = `bold ${fontSize}px sans-serif`;
+        
+        // use 1.8 instead of 2 to give a bit more room
+        const maxWidth = node.radius * 1.8;
+        const titleDims = context.measureText(node.title);
+
+        if (titleDims.width > maxWidth) {
+          const ellipsisWidth = context.measureText("...").width;
+          const targetWidth = maxWidth - ellipsisWidth;
+          let truncatedTitle = node.title;
+
+          const newLen = Math.floor((targetWidth / titleDims.width) * truncatedTitle.length) - 1; // -1 to be safe
+          truncatedTitle = truncatedTitle.slice(0, newLen) + "...";
+
+          context.fillText(truncatedTitle, node.x, node.y);
+        }
+        else {
+          context.fillText(node.title, node.x, node.y);
+        }
     }
   }
 
