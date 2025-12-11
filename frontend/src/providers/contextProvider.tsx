@@ -1,6 +1,6 @@
 import useCache from "@/hooks/cache";
 import { type Data, type Link, type Node } from "@/lib/data";
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 type ContextType = {
   colorList: [string, string][],
@@ -54,6 +54,24 @@ export const ContextProvider = ({
   const nodesRef = useRef<Map<number, Node>>(new Map());
   const edgesRef = useRef<Map<string, Link>>(new Map());
   const adjList = useRef<Map<string, Set<string>>>(new Map());
+
+  const filteredData = useMemo(() => {
+    const unknownNodeIds = new Set<string>();
+    const newNodes = data.nodes.filter(node => {
+      if (node.title === "unknown") {
+        unknownNodeIds.add(node.id);
+        return false;
+      }
+      return true
+    });
+
+    return {
+      nodes: newNodes,
+      links: data.links.filter(link => {
+        return !unknownNodeIds.has(link.source) && !unknownNodeIds.has(link.target);
+      }),
+    }
+  }, [data]);
 
   const setAppState = (newSeed: string, newDepth: number, page: "home" | "graph") => {
     _setAppState({ seed: newSeed, depth: newDepth, page });
@@ -232,7 +250,7 @@ export const ContextProvider = ({
     appState, setAppState,
     colorList,
     loading,
-    data,
+    data: filteredData,
     getChildren,
     getParent,
   };

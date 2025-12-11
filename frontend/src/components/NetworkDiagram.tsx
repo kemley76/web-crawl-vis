@@ -11,6 +11,7 @@ import throttle from "lodash.throttle";
 import GraphNav from "./GraphNav";
 import forceCollide from "@/lib/forceCollide";
 import forceCluster from "@/lib/forceCluster";
+import forceInertia from "@/lib/forceInertia";
 
 type NetworkDiagramProps = {
   width: number;
@@ -35,7 +36,21 @@ export const NetworkDiagram = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const appContext = useAppContext();
   const links = useMemo(() => data.links.map((d) => ({ ...d })), [data]);
-  const nodes = useMemo(() => data.nodes.map((d) => ({ ...d })), [data]);
+  const nodes = useMemo(() => {
+    const linkCount = new Map<string, number>();
+    data.links.forEach((link: Link) => {
+      const sourceCount = linkCount.get(link.source) || 0;
+      const targetCount = linkCount.get(link.target) || 0;
+
+      linkCount.set(link.source, sourceCount + 1);
+      linkCount.set(link.target, targetCount + 1);
+    });
+
+    return data.nodes.map((d) => ({
+      ...d,
+      degree: linkCount.get(d.id) || 0,
+    }));
+  }, [data]);
   const nodesRef = useRef<Node[]>([]);
   const [colorList, setColorList] = useState<{color: string, label: string}[]>([]);
 
@@ -55,9 +70,6 @@ export const NetworkDiagram = ({
       })
     }
 
-    if (simulationRef.current) {
-        simulationRef.current.alpha(0.01).restart();
-    }
   }, [hoveredNodeId, hoveredChildren]);
 
 
@@ -106,7 +118,7 @@ export const NetworkDiagram = ({
 
     simulationRef.current = d3.forceSimulation<Node, Link>(adjustedNodes)
     .force("charge", d3.forceManyBody()
-      .strength(-1000)
+      .strength(-300)
       .distanceMax(1000)
     )
     .force("link", d3.forceLink<Node, Link>(links)
@@ -114,12 +126,13 @@ export const NetworkDiagram = ({
       .distance(300)
       .iterations(1)
     )
+    .force("inertia", forceInertia())
     .force("cluster", forceCluster())
     .force("collide", forceCollide())
     .force("center", d3.forceCenter(width / 2, height / 2))
     .force("x", d3.forceX(width / 2).strength(0.02))
     .force("y", d3.forceY(height / 2).strength(0.02))
-    .alphaDecay(0.02)
+    .alphaDecay(0.03)
     .on("tick", draw)
   
 

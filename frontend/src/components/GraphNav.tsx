@@ -10,7 +10,7 @@ const GraphNav = () => {
     }
 
     return (
-        <div className='absolute top-0 left-0 m-2 rounded-md bg-neutral-900/50 outline h-auto w-fit flex gap-4 p-4 items-center justify-between'>
+        <div className='absolute top-0 left-0 m-2 rounded-md bg-neutral-900/50 outline h-auto w-fit flex gap-4 px-2 py-1 items-center justify-between'>
             <Button variant="outline" className="text-white w-fit" onClick={handleBackToHome}><ArrowBigLeft/></Button>
             <div className="w-full h-full flex flex-col p-2">
                 <div className="flex justify-between">
