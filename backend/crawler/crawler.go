@@ -1,7 +1,6 @@
 package crawler
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,15 +12,14 @@ import (
 
 	"github.com/kemley76/web-crawl-vis/v2/parser"
 	"github.com/temoto/robotstxt"
-	"golang.org/x/sync/semaphore"
 )
 
-const MAX_CONCURRENT_REQS = 2
+const PAGE_DATA_BACKLOG_SIZE = 10
 
 var client http.Client
 
 func init() {
-	client = http.Client{Timeout: time.Second}
+	client = http.Client{Timeout: time.Second * 5}
 }
 
 type crawler struct {
@@ -35,7 +33,6 @@ type crawler struct {
 	connectionAlive bool
 	wg              sync.WaitGroup
 	id_counter      atomic.Uint64 // Used to create unique ids for each URL
-	sem             *semaphore.Weighted
 }
 
 type queueEntry struct {
@@ -48,17 +45,16 @@ func NewCrawler(rw http.ResponseWriter, seedURLs []string) *crawler {
 	return &crawler{
 		seedURLs:        seedURLs,
 		rw:              rw,
-		dataChannel:     make(chan pageData),
+		dataChannel:     make(chan pageData, PAGE_DATA_BACKLOG_SIZE),
 		queues:          make(map[string][]queueEntry), // maps domains to URLs
 		connectionAlive: true,
-		sem:             semaphore.NewWeighted(MAX_CONCURRENT_REQS),
 	}
 }
 
 // Crawl will start crawling from the seed URLs up to the provided depth
 func (c *crawler) Crawl(depth int, delay int, clientDone <-chan struct{}) {
 	for _, url := range c.seedURLs {
-		c.enqueuePage(url, depth, delay) // starting with depth and counting down
+		c.enqueuePage(url, depth) // starting with depth and counting down
 	}
 
 	flusher, ok := c.rw.(http.Flusher)
@@ -75,6 +71,7 @@ func (c *crawler) Crawl(depth int, delay int, clientDone <-chan struct{}) {
 				fmt.Println("Connection closed")
 				return
 			case data := <-c.dataChannel:
+				time.Sleep(time.Duration(delay * int(time.Millisecond)))
 				fmt.Println("Crawled page:", data.Title, data.URL)
 				fmt.Fprint(c.rw, "event: data\ndata: ")
 				err := json.NewEncoder(c.rw).Encode(data)
@@ -101,7 +98,7 @@ func (c *crawler) Crawl(depth int, delay int, clientDone <-chan struct{}) {
 	fmt.Println("Done crawling!")
 }
 
-func (c *crawler) enqueuePage(rawURL string, depth int, delay int) (uint64, error) {
+func (c *crawler) enqueuePage(rawURL string, depth int) (uint64, error) {
 	url, err := cleanURL(rawURL, "")
 	if err != nil {
 		return 0, err
@@ -125,13 +122,13 @@ func (c *crawler) enqueuePage(rawURL string, depth int, delay int) (uint64, erro
 	} else {
 		c.queues[url.Host] = []queueEntry{{url.String(), depth}}
 		// Maybe try to change this out so that CrawlHost function never finishes until its actually all done
-		go c.CrawlHost(url.Host, depth, delay)
+		go c.CrawlHost(url.Host, depth)
 	}
 	return id, nil
 }
 
 // CrawlHost will crawl all the pages in the queue of a particular host up to a given depth
-func (c *crawler) CrawlHost(hostname string, depth int, delay int) {
+func (c *crawler) CrawlHost(hostname string, depth int) {
 	robotsData := c.getRobotsData(hostname)
 	if robotsData == nil {
 		robotsData = &robotstxt.RobotsData{}
@@ -145,10 +142,7 @@ func (c *crawler) CrawlHost(hostname string, depth int, delay int) {
 			break
 		}
 
-		c.sem.Acquire(context.Background(), 1)
-		milDelay := time.Duration(int(time.Millisecond) * delay)
-
-		time.Sleep(max(waittime.CrawlDelay, milDelay))
+		time.Sleep(waittime.CrawlDelay)
 		if !robotsData.TestAgent(url, "Go-http-client/1.1") {
 			id, ok := c.getNodeID(url)
 			if !ok {
@@ -159,13 +153,9 @@ func (c *crawler) CrawlHost(hostname string, depth int, delay int) {
 				URL:    url,
 				Errors: []string{"Path blocked by robots.txt"},
 			}
-			c.sem.Release(1)
 			continue // we can't crawl this page
 		}
-		go func() {
-			defer c.sem.Release(1)
-			c.crawlPage(url, hostname, depth, delay)
-		}()
+		c.dataChannel <- c.crawlPage(url, hostname, depth)
 	}
 }
 
@@ -187,7 +177,7 @@ func (c *crawler) getNextURL(hostname string) (string, int) {
 	return qe.url, qe.depth
 }
 
-func (c *crawler) crawlPage(rawURL, hostname string, depth int, delay int) {
+func (c *crawler) crawlPage(rawURL, hostname string, depth int) pageData {
 	id, _ := c.getNodeID(rawURL)
 	pd := pageData{
 		URL: rawURL,
@@ -199,9 +189,10 @@ func (c *crawler) crawlPage(rawURL, hostname string, depth int, delay int) {
 	pd.ResponseTime = int(time.Since(start).Milliseconds())
 
 	if err != nil {
-		pd.AddError("Error fetching page: " + err.Error())
-		c.dataChannel <- pd
-		return
+		msg := "Error fetching page: " + err.Error()
+		pd.AddError(msg)
+		fmt.Println(msg)
+		return pd
 	}
 
 	defer res.Body.Close()
@@ -221,7 +212,7 @@ func (c *crawler) crawlPage(rawURL, hostname string, depth int, delay int) {
 			}
 			if depth > 0 {
 				// only enqueue these links if the max depth has not been reached
-				id, err := c.enqueuePage(url.String(), depth-1, delay)
+				id, err := c.enqueuePage(url.String(), depth-1)
 				if err == nil {
 					pd.Neighbors = append(pd.Neighbors, id)
 				} else {
@@ -237,7 +228,7 @@ func (c *crawler) crawlPage(rawURL, hostname string, depth int, delay int) {
 		pd.Title = parseData.Title
 	}
 
-	c.dataChannel <- pd
+	return pd
 }
 
 func (c *crawler) getRobotsData(hostname string) *robotstxt.RobotsData {

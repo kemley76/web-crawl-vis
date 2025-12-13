@@ -25,25 +25,16 @@ func RunServer() {
 func crawl(rw http.ResponseWriter, r *http.Request) {
 	seeds := strings.Split(r.URL.Query().Get("seeds"), ",")
 	depth := r.URL.Query().Get("depth")
-	depthParsed := 1
-	if len(depth) > 0 {
-		var err error
-		depthParsed, err = strconv.Atoi(depth)
-		if err != nil {
-			depthParsed = 1
-		}
+	depthParsed, err := strconv.Atoi(depth)
+	if err != nil {
+		depthParsed = 1
 	}
 	delay := r.URL.Query().Get("delay")
-	delayParsed := 400
-	if len(delay) > 0 {
-		var err error
-		delayParsed, err = strconv.Atoi(delay)
-		if err != nil {
-			delayParsed = 400
-		}
+	delayParsed, err := strconv.Atoi(delay)
+	if err != nil {
+		delayParsed = 400
 	}
 
-	fmt.Println("SEEDS: ", seeds)
 	rw.Header().Set("Content-Type", "text/event-stream")
 	rw.Header().Set("Transfer-Encoding", "chunked")
 	rw.Header().Set("Cache-Control", "no-cache")
