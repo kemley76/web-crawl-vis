@@ -17,7 +17,6 @@ import (
 )
 
 const MAX_CONCURRENT_REQS = 2
-const ARTIFICIAL_DELAY = time.Millisecond * 400
 
 var client http.Client
 
@@ -57,9 +56,9 @@ func NewCrawler(rw http.ResponseWriter, seedURLs []string) *crawler {
 }
 
 // Crawl will start crawling from the seed URLs up to the provided depth
-func (c *crawler) Crawl(depth int, clientDone <-chan struct{}) {
+func (c *crawler) Crawl(depth int, delay int, clientDone <-chan struct{}) {
 	for _, url := range c.seedURLs {
-		c.enqueuePage(url, depth) // starting with depth and counting down
+		c.enqueuePage(url, depth, delay) // starting with depth and counting down
 	}
 
 	flusher, ok := c.rw.(http.Flusher)
@@ -102,7 +101,7 @@ func (c *crawler) Crawl(depth int, clientDone <-chan struct{}) {
 	fmt.Println("Done crawling!")
 }
 
-func (c *crawler) enqueuePage(rawURL string, depth int) (uint64, error) {
+func (c *crawler) enqueuePage(rawURL string, depth int, delay int) (uint64, error) {
 	url, err := cleanURL(rawURL, "")
 	if err != nil {
 		return 0, err
@@ -126,13 +125,13 @@ func (c *crawler) enqueuePage(rawURL string, depth int) (uint64, error) {
 	} else {
 		c.queues[url.Host] = []queueEntry{{url.String(), depth}}
 		// Maybe try to change this out so that CrawlHost function never finishes until its actually all done
-		go c.CrawlHost(url.Host, depth)
+		go c.CrawlHost(url.Host, depth, delay)
 	}
 	return id, nil
 }
 
 // CrawlHost will crawl all the pages in the queue of a particular host up to a given depth
-func (c *crawler) CrawlHost(hostname string, depth int) {
+func (c *crawler) CrawlHost(hostname string, depth int, delay int) {
 	robotsData := c.getRobotsData(hostname)
 	if robotsData == nil {
 		robotsData = &robotstxt.RobotsData{}
@@ -147,7 +146,9 @@ func (c *crawler) CrawlHost(hostname string, depth int) {
 		}
 
 		c.sem.Acquire(context.Background(), 1)
-		time.Sleep(max(waittime.CrawlDelay, ARTIFICIAL_DELAY))
+		milDelay := time.Duration(int(time.Millisecond) * delay)
+
+		time.Sleep(max(waittime.CrawlDelay, milDelay))
 		if !robotsData.TestAgent(url, "Go-http-client/1.1") {
 			id, ok := c.getNodeID(url)
 			if !ok {
@@ -163,7 +164,7 @@ func (c *crawler) CrawlHost(hostname string, depth int) {
 		}
 		go func() {
 			defer c.sem.Release(1)
-			c.crawlPage(url, hostname, depth)
+			c.crawlPage(url, hostname, depth, delay)
 		}()
 	}
 }
@@ -186,7 +187,7 @@ func (c *crawler) getNextURL(hostname string) (string, int) {
 	return qe.url, qe.depth
 }
 
-func (c *crawler) crawlPage(rawURL, hostname string, depth int) {
+func (c *crawler) crawlPage(rawURL, hostname string, depth int, delay int) {
 	id, _ := c.getNodeID(rawURL)
 	pd := pageData{
 		URL: rawURL,
@@ -220,7 +221,7 @@ func (c *crawler) crawlPage(rawURL, hostname string, depth int) {
 			}
 			if depth > 0 {
 				// only enqueue these links if the max depth has not been reached
-				id, err := c.enqueuePage(url.String(), depth-1)
+				id, err := c.enqueuePage(url.String(), depth-1, delay)
 				if err == nil {
 					pd.Neighbors = append(pd.Neighbors, id)
 				} else {

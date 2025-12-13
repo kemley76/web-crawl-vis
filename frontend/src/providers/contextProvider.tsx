@@ -6,8 +6,8 @@ type ContextType = {
   colorList: [string, string][],
   loading: boolean;
   data: Data;
-  appState: { seed: string; depth: number, page: "home" | "graph" };
-  setAppState: (newSeed: string, newDepth: number, page: "home" | "graph") => void;
+  appState: { seed: string; depth: number, delay: number, page: "home" | "graph" };
+  setAppState: (newSeed: string, newDepth: number, delay: number, page: "home" | "graph") => void;
   getChildren: (nodeId: string) => Set<string> | undefined;
   getParent: (nodeId: string) => string | null;
 };
@@ -15,7 +15,7 @@ type ContextType = {
 const DEFAULT_COLOR = "#5c33ff"
 
 const defaultContext: ContextType = {
-  appState: { seed: "https://go.dev/", depth: 1, page: "home" },
+  appState: { seed: "https://go.dev/", depth: 1, delay: 400, page: "home" },
   colorList: [],
   loading: false,
   data: {
@@ -47,7 +47,7 @@ export const ContextProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const [appState, _setAppState] = useState<{ seed: string; depth: number, page: "home" | "graph" }>(defaultContext.appState);
+  const [appState, _setAppState] = useState<{ seed: string; depth: number, delay: number, page: "home" | "graph" }>(defaultContext.appState);
   const [data, setData] = useState<Data>(defaultContext.data);
   const [colorList, setColorList] = useState<[string, string][]>(defaultContext.colorList);
   const [loading, setLoading] = useState(defaultContext.loading);
@@ -73,8 +73,8 @@ export const ContextProvider = ({
     }
   }, [data]);
 
-  const setAppState = (newSeed: string, newDepth: number, page: "home" | "graph") => {
-    _setAppState({ seed: newSeed, depth: newDepth, page });
+  const setAppState = (newSeed: string, newDepth: number, newDelay: number, page: "home" | "graph") => {
+    _setAppState({ seed: newSeed, depth: newDepth, delay: newDelay, page });
 
     if (page === "home") {
       // Reset graph data when going back to home
@@ -226,6 +226,7 @@ export const ContextProvider = ({
     const url = new URL("/crawl", document.location);
     url.searchParams.append("seeds", appState.seed);
     url.searchParams.append("depth", appState.depth.toString());
+    url.searchParams.append("delay", appState.delay.toString());
     const evtSource = new EventSource(url.toString());
     setLoading(true);
 

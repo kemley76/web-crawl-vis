@@ -13,6 +13,7 @@ const Home = () => {
         const formData = new FormData(event.currentTarget);
         const seedUrl = formData.get("seedUrl")
         const crawlDepth = formData.get("depth")
+        const crawlDelay = formData.get("delay")
 
         if (!seedUrl || !crawlDepth) {
             alert("Please fill in all fields");
@@ -25,11 +26,16 @@ const Home = () => {
             return;
         }
 
+        if (isNaN(Number(crawlDelay)) || Number(crawlDelay) < 0.01) {
+            alert("Crawl delay must be a positive number >= 0.01 seconds");
+            return;
+        }
+
         try {
             // make sure it's a valid URL
             new URL(seedUrl.toString());
 
-            appContext.setAppState(seedUrl.toString(), Number(crawlDepth), "graph");
+            appContext.setAppState(seedUrl.toString(), Number(crawlDepth), Number(crawlDelay) * 1000, "graph");
         }
         catch (e) {
             alert("Please enter a valid URL");
@@ -48,6 +54,10 @@ const Home = () => {
                     <div className="flex flex-col gap-4">
                         <Label className="text-white">Crawl Depth</Label>
                         <Input type="number" name="depth" className="bg-secondary border-neutral-400" placeholder="1"/>
+                    </div>
+                    <div className="flex flex-col gap-4">
+                        <Label className="text-white">Crawl Delay</Label>
+                        <Input type="number" step=".01" name="delay" className="bg-secondary border-neutral-400" placeholder="0.4"/>
                     </div>
                 </div>
 

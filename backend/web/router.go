@@ -33,6 +33,16 @@ func crawl(rw http.ResponseWriter, r *http.Request) {
 			depthParsed = 1
 		}
 	}
+	delay := r.URL.Query().Get("delay")
+	delayParsed := 400
+	if len(delay) > 0 {
+		var err error
+		delayParsed, err = strconv.Atoi(delay)
+		if err != nil {
+			delayParsed = 400
+		}
+	}
+
 	fmt.Println("SEEDS: ", seeds)
 	rw.Header().Set("Content-Type", "text/event-stream")
 	rw.Header().Set("Transfer-Encoding", "chunked")
@@ -40,5 +50,5 @@ func crawl(rw http.ResponseWriter, r *http.Request) {
 	rw.Header().Set("Connection", "keep-alive")
 
 	crawler := crawler.NewCrawler(rw, seeds)
-	crawler.Crawl(depthParsed, r.Context().Done())
+	crawler.Crawl(depthParsed, delayParsed, r.Context().Done())
 }

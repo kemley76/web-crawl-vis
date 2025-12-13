@@ -58,6 +58,9 @@ export const NetworkDiagram = ({
   const hoveredChildren = useMemo(() => {
     return appContext.getChildren(hoveredNodeId ?? "0");
   }, [hoveredNodeId, appContext]);
+  const hoveredDegree = useMemo(() => {
+    return hoveredNodeId === null ? 0 : nodes.find(node => node.id === hoveredNodeId)?.degree
+  }, [hoveredNodeId, nodes])
 
   useEffect(() => {
     hoverStateRef.current = { id: hoveredNodeId, children: hoveredChildren };
@@ -120,6 +123,7 @@ export const NetworkDiagram = ({
     simulationRef.current = d3.forceSimulation<Node, Link>(adjustedNodes)
     .force("charge", d3.forceManyBody()
       .strength(-300)
+      .distanceMin(50)
       .distanceMax(1000)
     )
     .force("link", d3.forceLink<Node, Link>(links)
@@ -131,14 +135,12 @@ export const NetworkDiagram = ({
     .force("cluster", forceCluster())
     .force("collide", forceCollide())
     .force("center", d3.forceCenter(width / 2, height / 2))
-    .force("x", d3.forceX(width / 2).strength(0.02))
-    .force("y", d3.forceY(height / 2).strength(0.02))
-    .alphaDecay(0.03)
+    .alphaDecay(0.02)
     .on("tick", draw)
   
 
     const zoom = d3.zoom<HTMLCanvasElement, unknown>()
-    .scaleExtent([0.1, 8])
+    .scaleExtent([0.05, 15])
     .on("zoom", ({transform}: {transform: d3.ZoomTransform}) => {
       zoomRef.current = transform;
 
@@ -199,7 +201,9 @@ export const NetworkDiagram = ({
         hoveredNodeId &&
         <NodeTooltip data={nodes.find(n => n.id === hoveredNodeId)!} />
       }
-      <Legend legendItems={[
+      <Legend
+      hoveredEdgesCount={hoveredDegree} 
+      legendItems={[
         {
           color: BLUE,
           label: "Referenced in",
