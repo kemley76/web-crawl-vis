@@ -29,8 +29,8 @@ export const NetworkDiagram = ({
     id: null,
     children: undefined,
   });
-
-  const nodePositions = useRef<Map<any, [number, number]>>(new Map<any, [number, number]>());
+  // x, y, vx, vy
+  const nodePositions = useRef<Map<any, [number, number, number, number]>>(new Map<any, [number, number, number, number]>());
   const zoomRef = useRef(d3.zoomIdentity);
   const gridRef = useRef<HTMLDivElement>(null);
   const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
@@ -58,9 +58,6 @@ export const NetworkDiagram = ({
   const hoveredChildren = useMemo(() => {
     return appContext.getChildren(hoveredNodeId ?? "0");
   }, [hoveredNodeId, appContext]);
-  const hoveredDegree = useMemo(() => {
-    return hoveredNodeId === null ? 0 : nodes.find(node => node.id === hoveredNodeId)?.degree
-  }, [hoveredNodeId, nodes])
 
   useEffect(() => {
     hoverStateRef.current = { id: hoveredNodeId, children: hoveredChildren };
@@ -96,16 +93,29 @@ export const NetworkDiagram = ({
       let pos = nodePositions.current.get(node.id);
 
       if (pos) {
-        return { ...node, x: pos[0], y: pos[1] };
+        return { 
+          ...node, 
+          x: pos[0], 
+          y: pos[1],
+          vx: pos[2], 
+          vy: pos[3]
+        };
       }
       const parent = appContext.getParent(node.id)
-      pos = parent ? nodePositions.current.get(parent) ?? [width / 2, height / 2] : [width / 2, height / 2];
-      const [x, y] = pos;
+      pos = parent ? nodePositions.current.get(parent) ?? [width / 2, height / 2, 0, 0] : [width / 2, height / 2, 0, 0];
+      const [x, y, vx, vy] = pos;
+
+      const radius = 50;
+      const angle = Math.random() * Math.PI * 2;
+      const dx = Math.cos(angle) * radius;
+      const dy = Math.sin(angle) * radius;
 
       return {
           ...node,
-          x: x + (Math.random() - 0.5) * 50 ,
-          y: y + (Math.random() - 0.5) * 50 ,
+          x: x + dx,
+          y: y + dy,
+          vx,
+          vy
       };
     });
 
@@ -113,9 +123,9 @@ export const NetworkDiagram = ({
 
     const draw = () => {
       adjustedNodes.forEach((node: Node) => {
-          let pos = [node.x ?? 0, node.y ?? 0]
+          let pos = [node.x ?? 0, node.y ?? 0, node.vx ?? 0, node.vy ?? 0];
 
-          nodePositions.current.set(node.id, pos as [number, number]);
+          nodePositions.current.set(node.id, pos as [number, number, number, number]);
       });
       drawNetwork(context, width, height, adjustedNodes, links, zoomRef.current, hoverStateRef.current.id, setColorList, hoverStateRef.current.children)
     }
@@ -124,7 +134,7 @@ export const NetworkDiagram = ({
     .force("charge", d3.forceManyBody()
       .strength(-300)
       .distanceMin(50)
-      .distanceMax(1000)
+      .distanceMax(500)
     )
     .force("link", d3.forceLink<Node, Link>(links)
       .id((d) => d.id)
@@ -134,8 +144,10 @@ export const NetworkDiagram = ({
     .force("inertia", forceInertia())
     .force("cluster", forceCluster())
     .force("collide", forceCollide())
-    .force("center", d3.forceCenter(width / 2, height / 2))
+    .force("x", d3.forceX(width / 2).strength(0.0001))
+    .force("y", d3.forceY(height / 2).strength(0.0001))
     .alphaDecay(0.02)
+    .alpha(0.3)
     .on("tick", draw)
   
 
@@ -202,7 +214,6 @@ export const NetworkDiagram = ({
         <NodeTooltip data={nodes.find(n => n.id === hoveredNodeId)!} />
       }
       <Legend
-      hoveredEdgesCount={hoveredDegree} 
       legendItems={[
         {
           color: BLUE,
