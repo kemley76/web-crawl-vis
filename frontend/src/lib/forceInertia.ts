@@ -10,7 +10,7 @@ export default function forceInertia() {
             continue;
         }
 
-        const mobility = 1 / (Math.max(node.degree ?? 0, 10) * strength + 1);
+        const mobility = 1 / (Math.max(node.degree ?? 0, 50) * strength + 1);
         node.vx = (node.vx ?? 0) * mobility;
         node.vy = (node.vy ?? 0) * mobility;
     }

@@ -144,8 +144,8 @@ export const NetworkDiagram = ({
     .force("inertia", forceInertia())
     .force("cluster", forceCluster())
     .force("collide", forceCollide())
-    .force("x", d3.forceX(width / 2).strength(0.0001))
-    .force("y", d3.forceY(height / 2).strength(0.0001))
+    .force("x", d3.forceX(width / 2).strength(0.001))
+    .force("y", d3.forceY(height / 2).strength(0.001))
     .alphaDecay(0.02)
     .alpha(0.3)
     .on("tick", draw)
@@ -222,7 +222,7 @@ export const NetworkDiagram = ({
         },
         {
           color: YELLOW,
-          label: "References",
+          label: "Referenced by",
           hollow: true,
         },
         {
